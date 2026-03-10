@@ -46,7 +46,8 @@ server.registerTool(
     // Parse JSON response, extract .response field
     try {
       const parsed = JSON.parse(result.stdout);
-      return { content: [{ type: "text", text: parsed.response }] };
+      const text = typeof parsed.response === "string" ? parsed.response : result.stdout;
+      return { content: [{ type: "text", text }] };
     } catch {
       // Fallback: return raw stdout if JSON parsing fails
       return { content: [{ type: "text", text: result.stdout }] };

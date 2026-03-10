@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-interface CliResult {
+export interface CliResult {
   stdout: string;
   stderr: string;
   exitCode: number;
@@ -28,12 +28,18 @@ async function runCli(
     child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
     child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
 
+    let settled = false;
+
     child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve({ stdout, stderr, exitCode: code ?? 1 });
     });
 
     child.on("error", (err) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve({ stdout, stderr: err.message, exitCode: 1 });
     });
