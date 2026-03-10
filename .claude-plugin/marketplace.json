@@ -1,0 +1,22 @@
+{
+  "name": "llm-orchestrator",
+  "owner": {
+    "name": "sirkhet"
+  },
+  "plugins": [
+    {
+      "name": "llm-orchestrator",
+      "source": "./",
+      "description": "Gemini and Codex CLI tools for content generation and code review",
+      "version": "0.1.0",
+      "author": { "name": "sirkhet" },
+      "license": "MIT",
+      "mcpServers": {
+        "llm-orchestrator": {
+          "command": "node",
+          "args": ["dist/server.js"]
+        }
+      }
+    }
+  ]
+}
