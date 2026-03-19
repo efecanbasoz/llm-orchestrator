@@ -27,8 +27,11 @@ Code review via Codex. Returns findings as text only — never modifies files.
 ## Prerequisites
 
 - **Node.js** >= 18
-- **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** — installed and authenticated (`gemini` must be in PATH)
-- **[Codex CLI](https://github.com/openai/codex)** — installed and authenticated (`codex` must be in PATH)
+- At least one of the following CLIs (install both for all tools):
+  - **[Gemini CLI](https://github.com/google-gemini/gemini-cli)** — enables `gemini_generate` (`gemini` must be in PATH)
+  - **[Codex CLI](https://github.com/openai/codex)** — enables `codex_review` (`codex` must be in PATH)
+
+The server auto-detects which CLIs are available and only registers the corresponding tools.
 
 ## Installation
 

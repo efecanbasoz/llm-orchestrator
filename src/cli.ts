@@ -1,4 +1,13 @@
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
+
+export function isAvailable(command: string): boolean {
+  try {
+    execFileSync("which", [command], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export interface CliResult {
   stdout: string;
