@@ -2,36 +2,34 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { buildGeminiPrompt, buildCodexPrompt } from "./templates.js";
-import { execGemini, execCodex, isAvailable } from "./cli.js";
+import { execGemini, execCodex, resolveCommand } from "./cli.js";
 
-const hasGemini = isAvailable("gemini");
-const hasCodex = isAvailable("codex");
+const geminiPath = resolveCommand("gemini");
+const codexPath = resolveCommand("codex");
 
-if (!hasGemini && !hasCodex) {
+if (!geminiPath && !codexPath) {
   console.error(
-    "llm-orchestrator: neither 'gemini' nor 'codex' found in PATH. Install at least one:\n" +
+    "llm-orchestrator: neither 'gemini' nor 'codex' found. Install at least one:\n" +
     "  Gemini CLI: https://github.com/google-gemini/gemini-cli\n" +
     "  Codex CLI:  https://github.com/openai/codex",
   );
-  process.exit(1);
 }
 
 const toolDescriptions: string[] = [];
-if (hasGemini) toolDescriptions.push("- gemini_generate: Use for copywriting, UI text, and content generation.");
-if (hasCodex) toolDescriptions.push("- codex_review: Use for code review before commits. Returns feedback only — no file modifications.");
+if (geminiPath) toolDescriptions.push("- gemini_generate: Use for copywriting, UI text, and content generation.");
+if (codexPath) toolDescriptions.push("- codex_review: Use for code review before commits. Returns feedback only — no file modifications.");
 
 const server = new McpServer(
   { name: "llm-orchestrator", version: "0.1.0" },
   {
-    instructions: [
-      `LLM Orchestrator provides ${toolDescriptions.length} tool(s):`,
-      ...toolDescriptions,
-    ].join("\n"),
+    instructions: toolDescriptions.length > 0
+      ? [`LLM Orchestrator provides ${toolDescriptions.length} tool(s):`, ...toolDescriptions].join("\n")
+      : "LLM Orchestrator: no CLI tools detected. Install gemini or codex CLI to enable tools.",
   },
 );
 
 // --- gemini_generate ---
-if (hasGemini) {
+if (geminiPath) {
   server.registerTool(
     "gemini_generate",
     {
@@ -50,7 +48,7 @@ if (hasGemini) {
     },
     async ({ prompt, type, context, language }) => {
       const fullPrompt = buildGeminiPrompt(type, prompt, context, language);
-      const result = await execGemini(fullPrompt);
+      const result = await execGemini(geminiPath, fullPrompt);
 
       if (result.exitCode !== 0) {
         return {
@@ -73,7 +71,7 @@ if (hasGemini) {
 }
 
 // --- codex_review ---
-if (hasCodex) {
+if (codexPath) {
   server.registerTool(
     "codex_review",
     {
@@ -91,7 +89,7 @@ if (hasCodex) {
     },
     async ({ code, focus }) => {
       const reviewPrompt = buildCodexPrompt(code, focus);
-      const result = await execCodex(reviewPrompt);
+      const result = await execCodex(codexPath, reviewPrompt);
 
       if (result.exitCode !== 0) {
         return {

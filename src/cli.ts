@@ -1,12 +1,38 @@
 import { spawn, execFileSync } from "node:child_process";
+import { existsSync, readdirSync } from "node:fs";
+import { join, resolve as resolvePath } from "node:path";
+import { homedir } from "node:os";
 
-export function isAvailable(command: string): boolean {
+/**
+ * Resolve the full path of a CLI command.
+ * Checks PATH via `which` first, then falls back to common NVM global bin dirs.
+ * Returns the absolute path if found, or null.
+ */
+export function resolveCommand(command: string): string | null {
+  // Try PATH first (works when shell profile is sourced)
   try {
-    execFileSync("which", [command], { stdio: "ignore" });
-    return true;
+    return execFileSync("which", [command], { stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
   } catch {
-    return false;
+    // which failed — fall through to NVM lookup
   }
+
+  // Check NVM global bin directories
+  const nvmDir = join(homedir(), ".nvm", "versions", "node");
+  try {
+    if (existsSync(nvmDir)) {
+      const versions = readdirSync(nvmDir);
+      for (const ver of versions.reverse()) {
+        const binPath = resolvePath(nvmDir, ver, "bin", command);
+        if (existsSync(binPath)) return binPath;
+      }
+    }
+  } catch {
+    // NVM dir not accessible — ignore
+  }
+
+  return null;
 }
 
 export interface CliResult {
@@ -75,13 +101,13 @@ async function runWithRetry(
   return runCli(command, args, options);
 }
 
-export async function execGemini(prompt: string): Promise<CliResult> {
-  return runWithRetry("gemini", ["-p", prompt, "--output-format", "json"]);
+export async function execGemini(resolvedPath: string, prompt: string): Promise<CliResult> {
+  return runWithRetry(resolvedPath, ["-p", prompt, "--output-format", "json"]);
 }
 
-export async function execCodex(prompt: string): Promise<CliResult> {
+export async function execCodex(resolvedPath: string, prompt: string): Promise<CliResult> {
   return runWithRetry(
-    "codex",
+    resolvedPath,
     ["exec", "--skip-git-repo-check", "--sandbox", "read-only", "-"],
     { stdin: prompt },
   );
