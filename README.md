@@ -38,13 +38,13 @@ The server auto-detects which CLIs are available and only registers the correspo
 ### Claude Code Plugin
 
 ```bash
-claude plugin add sirkhet-dev/llm-orchestrator
+claude plugin add efecanbasoz/llm-orchestrator
 ```
 
 ### Standalone MCP Server
 
 ```bash
-git clone https://github.com/sirkhet-dev/llm-orchestrator.git
+git clone https://github.com/efecanbasoz/llm-orchestrator.git
 cd llm-orchestrator
 npm install
 ```
