@@ -4,29 +4,42 @@ import { z } from "zod";
 import { buildGeminiPrompt, buildCodexPrompt } from "./templates.js";
 import { execGemini, execCodex, resolveCommand } from "./cli.js";
 
-const geminiPath = resolveCommand("gemini");
-const codexPath = resolveCommand("codex");
-
-if (!geminiPath && !codexPath) {
-  console.error(
-    "llm-orchestrator: neither 'gemini' nor 'codex' found. Install at least one:\n" +
-    "  Gemini CLI: https://github.com/google-gemini/gemini-cli\n" +
-    "  Codex CLI:  https://github.com/openai/codex",
-  );
+// QA-007: CLI detection and tool descriptions as a pure function (no side effects at import)
+interface DetectedClis {
+  geminiPath: string | null;
+  codexPath: string | null;
 }
 
-const toolDescriptions: string[] = [];
-if (geminiPath) toolDescriptions.push("- gemini_generate: Use for copywriting, UI text, and content generation.");
-if (codexPath) toolDescriptions.push("- codex_review: Use for code review before commits. Returns feedback only — no file modifications.");
+export function detectCliPaths(): DetectedClis {
+  return {
+    geminiPath: resolveCommand("gemini"),
+    codexPath: resolveCommand("codex"),
+  };
+}
 
-const server = new McpServer(
-  { name: "llm-orchestrator", version: "0.1.0" },
-  {
-    instructions: toolDescriptions.length > 0
-      ? [`LLM Orchestrator provides ${toolDescriptions.length} tool(s):`, ...toolDescriptions].join("\n")
-      : "LLM Orchestrator: no CLI tools detected. Install gemini or codex CLI to enable tools.",
-  },
-);
+export function createServer(paths: DetectedClis = detectCliPaths()): McpServer {
+  const { geminiPath, codexPath } = paths;
+
+  if (!geminiPath && !codexPath) {
+    console.error(
+      "llm-orchestrator: neither 'gemini' nor 'codex' found. Install at least one:\n" +
+      "  Gemini CLI: https://github.com/google-gemini/gemini-cli\n" +
+      "  Codex CLI:  https://github.com/openai/codex",
+    );
+  }
+
+  const toolDescriptions: string[] = [];
+  if (geminiPath) toolDescriptions.push("- gemini_generate: Use for copywriting, UI text, and content generation.");
+  if (codexPath) toolDescriptions.push("- codex_review: Use for code review before commits. Returns feedback only — no file modifications.");
+
+  const server = new McpServer(
+    { name: "llm-orchestrator", version: "0.1.0" },
+    {
+      instructions: toolDescriptions.length > 0
+        ? [`LLM Orchestrator provides ${toolDescriptions.length} tool(s):`, ...toolDescriptions].join("\n")
+        : "LLM Orchestrator: no CLI tools detected. Install gemini or codex CLI to enable tools.",
+    },
+  );
 
 // --- gemini_generate ---
 if (geminiPath) {
@@ -106,8 +119,12 @@ if (codexPath) {
   );
 }
 
+  return server;
+}
+
 // --- Start ---
 async function main(): Promise<void> {
+  const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
