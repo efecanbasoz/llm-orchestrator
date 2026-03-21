@@ -22,7 +22,7 @@
     "claude-code",
     "ai"
   ],
-  "author": "sirkhet",
+  "author": "Efecan Basoz <efecan@sirkhet.com>",
   "license": "MIT",
   "engines": {
     "node": ">=18"
