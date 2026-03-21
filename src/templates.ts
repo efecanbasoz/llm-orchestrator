@@ -23,5 +23,5 @@ export function buildGeminiPrompt(
 
 export function buildCodexPrompt(code: string, focus?: string): string {
   const focusLine = focus ? `\nFocus area: ${focus}` : "";
-  return `You are a code reviewer. Review the following code and provide actionable feedback. Do NOT modify any files — only return your review as text.${focusLine}\n\nCode to review:\n\`\`\`\n${code}\n\`\`\``;
+  return `You are a code reviewer. Review the following code and provide actionable feedback. Do NOT modify any files — only return your review as text.${focusLine}\n\nCode to review:\n<code>\n${code}\n</code>`;
 }

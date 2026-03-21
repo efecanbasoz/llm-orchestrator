@@ -38,12 +38,12 @@ if (geminiPath) {
         "Generate copywriting, UI text, or content via Gemini. Use when you need marketing copy, interface microcopy, headlines, descriptions, or any text content.",
       annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: {
-        prompt: z.string().describe("What to generate"),
+        prompt: z.string().min(1).max(20_000).describe("What to generate"),
         type: z
           .enum(["copywriting", "ui-text", "content"])
           .describe("copywriting = marketing/sales copy, ui-text = labels/tooltips/CTAs, content = articles/descriptions"),
-        context: z.string().optional().describe("Project or brand context to inform the output"),
-        language: z.string().optional().describe("Output language as ISO 639-1 code (default: en)"),
+        context: z.string().max(5_000).optional().describe("Project or brand context to inform the output"),
+        language: z.string().regex(/^[a-z]{2}$/i).optional().describe("Output language as ISO 639-1 code (default: en)"),
       },
     },
     async ({ prompt, type, context, language }) => {
@@ -51,19 +51,20 @@ if (geminiPath) {
       const result = await execGemini(geminiPath, fullPrompt);
 
       if (result.exitCode !== 0) {
+        // SEC-007: Generic error to avoid leaking internal details
         return {
-          content: [{ type: "text", text: `Gemini error: ${result.stderr || result.stdout}` }],
+          content: [{ type: "text", text: "Gemini generation failed. Check CLI availability and credentials." }],
           isError: true,
         };
       }
 
-      // Parse JSON response, extract .response field
+      // QA-005: Parse JSON response with typed validation
       try {
-        const parsed = JSON.parse(result.stdout);
-        const text = typeof parsed.response === "string" ? parsed.response : result.stdout;
+        const parsed: unknown = JSON.parse(result.stdout);
+        const payload = z.object({ response: z.string() }).safeParse(parsed);
+        const text = payload.success ? payload.data.response : result.stdout;
         return { content: [{ type: "text", text }] };
       } catch {
-        // Fallback: return raw stdout if JSON parsing fails
         return { content: [{ type: "text", text: result.stdout }] };
       }
     },
@@ -78,11 +79,12 @@ if (codexPath) {
       title: "Codex Review",
       description:
         "Code review via Codex. Returns review findings and suggestions as text only — never modifies files. Use before commits to get an independent review.",
-      annotations: { readOnlyHint: true, openWorldHint: false },
+      annotations: { readOnlyHint: true, openWorldHint: true },
       inputSchema: {
-        code: z.string().describe("Code or diff to review"),
+        code: z.string().min(1).max(200_000).describe("Code or diff to review"),
         focus: z
           .string()
+          .max(500)
           .optional()
           .describe("Specific review focus: security, performance, edge-cases, readability, etc."),
       },
@@ -92,8 +94,9 @@ if (codexPath) {
       const result = await execCodex(codexPath, reviewPrompt);
 
       if (result.exitCode !== 0) {
+        // SEC-007: Generic error to avoid leaking internal details
         return {
-          content: [{ type: "text", text: `Codex error: ${result.stderr || result.stdout}` }],
+          content: [{ type: "text", text: "Codex review failed. Check CLI availability and credentials." }],
           isError: true,
         };
       }
@@ -109,4 +112,7 @@ async function main(): Promise<void> {
   await server.connect(transport);
 }
 
-main().catch(console.error);
+main().catch((error: unknown) => {
+  console.error("llm-orchestrator startup failed:", error);
+  process.exitCode = 1;
+});
