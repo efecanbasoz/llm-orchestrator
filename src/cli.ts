@@ -1,7 +1,27 @@
 import { spawn, execFileSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, mkdtempSync } from "node:fs";
 import { join, resolve as resolvePath } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
+
+// SEC-003: Allowlist of env vars passed to child CLIs
+const SAFE_ENV_KEYS = ["PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "NODE_ENV", "TMPDIR"];
+const PROVIDER_ENV_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY"];
+
+function buildSafeEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const key of [...SAFE_ENV_KEYS, ...PROVIDER_ENV_KEYS]) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  return env;
+}
+
+// SEC-005: Output size limit to prevent OOM
+const MAX_OUTPUT_BYTES = 2_000_000;
+
+// SEC-001/002: Create isolated cwd for subprocess
+function createIsolatedCwd(): string {
+  return mkdtempSync(join(tmpdir(), "llm-orch-"));
+}
 
 /**
  * Resolve the full path of a CLI command.
@@ -41,12 +61,16 @@ export interface CliResult {
   exitCode: number;
 }
 
+const TIMEOUT_MS = 60_000;
+const RETRY_DELAY_MS = 2_000;
+
 async function runCli(
   command: string,
   args: string[],
-  options?: { stdin?: string; timeoutMs?: number },
+  options?: { stdin?: string; timeoutMs?: number; cwd?: string },
 ): Promise<CliResult> {
-  const timeout = options?.timeoutMs ?? 60_000;
+  const timeout = options?.timeoutMs ?? TIMEOUT_MS;
+  const cwd = options?.cwd ?? createIsolatedCwd();
 
   return new Promise((resolve) => {
     const ac = new AbortController();
@@ -55,13 +79,21 @@ async function runCli(
     const child = spawn(command, args, {
       signal: ac.signal,
       stdio: ["pipe", "pipe", "pipe"],
+      env: buildSafeEnv(),
+      cwd,
     });
 
     let stdout = "";
     let stderr = "";
 
-    child.stdout.on("data", (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on("data", (d: Buffer) => { stderr += d.toString(); });
+    child.stdout.on("data", (d: Buffer) => {
+      stdout += d.toString();
+      if (Buffer.byteLength(stdout) > MAX_OUTPUT_BYTES) ac.abort();
+    });
+    child.stderr.on("data", (d: Buffer) => {
+      stderr += d.toString();
+      if (Buffer.byteLength(stderr) > MAX_OUTPUT_BYTES) ac.abort();
+    });
 
     let settled = false;
 
@@ -91,13 +123,15 @@ async function runCli(
 async function runWithRetry(
   command: string,
   args: string[],
-  options?: { stdin?: string; timeoutMs?: number },
+  options?: { stdin?: string; timeoutMs?: number; cwd?: string },
 ): Promise<CliResult> {
   const result = await runCli(command, args, options);
   if (result.exitCode === 0) return result;
 
-  // Single retry after 2s
-  await new Promise((r) => setTimeout(r, 2000));
+  // SEC-006: Don't retry on timeout or abort — only transient failures
+  if (result.stderr.includes("abort") || result.stderr.includes("SIGTERM")) return result;
+
+  await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
   return runCli(command, args, options);
 }
 
