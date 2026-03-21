@@ -6,6 +6,8 @@
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "inspector": "npx @modelcontextprotocol/inspector node dist/server.js"
   },
   "repository": {
@@ -31,6 +33,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.0"
   }
 }
