@@ -34,8 +34,10 @@ export function resolveCommand(command: string): string | null {
     return execFileSync("which", [command], { stdio: ["ignore", "pipe", "ignore"] })
       .toString()
       .trim();
-  } catch {
-    // which failed — fall through to NVM lookup
+  } catch (error: unknown) {
+    // QA-006: Log resolution failure context for debugging
+    const msg = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`resolveCommand: PATH lookup for '${command}' failed: ${msg}\n`);
   }
 
   // Check NVM global bin directories
@@ -48,8 +50,9 @@ export function resolveCommand(command: string): string | null {
         if (existsSync(binPath)) return binPath;
       }
     }
-  } catch {
-    // NVM dir not accessible — ignore
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`resolveCommand: NVM lookup for '${command}' failed: ${msg}\n`);
   }
 
   return null;
@@ -136,7 +139,9 @@ async function runWithRetry(
 }
 
 export async function execGemini(resolvedPath: string, prompt: string): Promise<CliResult> {
-  return runWithRetry(resolvedPath, ["-p", prompt, "--output-format", "json"]);
+  // SEC-004: Pass prompt via stdin to keep it out of argv (visible in ps).
+  // Gemini CLI reads from stdin when no -p argument is given and stdin is not a TTY.
+  return runWithRetry(resolvedPath, ["--output-format", "json"], { stdin: prompt });
 }
 
 export async function execCodex(resolvedPath: string, prompt: string): Promise<CliResult> {
